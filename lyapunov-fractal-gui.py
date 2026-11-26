@@ -4,17 +4,8 @@ import matplotlib.pyplot as plt
 
 import plotly.graph_objects as go
 import plotly.express as px
-from IPython.display import display, HTML
-import plotly
 from dash import Dash, dcc, html, Input, Output, State, callback
 import dash_bootstrap_components as dbc
-
-plotly.offline.init_notebook_mode()
-display(
-    HTML(
-        '<script type="text/javascript" async src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_SVG"></script>'
-    )
-)
 
 
 @njit
