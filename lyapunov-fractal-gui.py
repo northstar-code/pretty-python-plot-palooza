@@ -17,21 +17,23 @@ def map_loop(
     x = x0
     N = 0
     logs = np.empty(base_loop.shape[0] * loop_iters, np.float64)
-    for _ in range(loop_iters):
+    for ITER in range(loop_iters):
         for base in base_loop:
             x *= base * (1.0 - x)
             if not np.isfinite(x):
-                print("infinite X!")
+                break
 
-            log = np.log(np.abs(base * (1.0 - 2 * x)))
-            if np.isfinite(log):
-                logs[N] = log
-                N += 1
+            if ITER > 5:
+                log = np.log(np.abs(base * (1.0 - 2 * x)))
+                if np.isfinite(log):
+                    logs[N] = log
+                    N += 1
 
     if N > base_loop.shape[0] * 2:
         lyap_exp = np.nanmean(logs[:N])
     else:
         lyap_exp = np.nan
+        print(base_loop)
 
     return lyap_exp
 
@@ -76,14 +78,19 @@ def map_grid(
 def gui(debug: bool = False, port: int = 8000, jupyter_mode: str = "inline"):
     DEFAULTCODE = "AB"
     DEFAULTCODE_BOOL = [c == "B" for c in DEFAULTCODE.upper()]
+    NGRID0 = 250
+    NLOOP0 = 50
 
-    xs = np.linspace(0, 4, 10)
-    ys = np.linspace(0, 4, 10)
     data = np.zeros((10, 10))
 
     img = go.Heatmap(
-        z=data, x=xs, y=ys, colorscale="Viridis", showscale=False, hoverinfo="skip"
-    )
+        z=data,
+        x=[0, 4],
+        y=[0, 4],
+        colorscale="Viridis",
+        showscale=False,
+        zsmooth="best",
+    )  # , hoverinfo="skip"
 
     fig = go.Figure(data=[img])
 
@@ -130,11 +137,11 @@ def gui(debug: bool = False, port: int = 8000, jupyter_mode: str = "inline"):
     
     dbc.Row([
         dbc.Col(
-            html.Div([dbc.FormText("Grid Density"), dbc.Input(value=250, type='number',step=1, min=100,id="NGRID", debounce=True)]),
+            html.Div([dbc.FormText("Grid Density"), dbc.Input(value=NGRID0, type='number',step=1, min=100,id="NGRID", debounce=True)]),
             width=5
         ),
         dbc.Col(
-            html.Div([dbc.FormText("Iteration Count"), dbc.Input(value=50, type='number',step=1, min=25,id="NLOOP", debounce=True)]),
+            html.Div([dbc.FormText("Iteration Count"), dbc.Input(value=NLOOP0, type='number',step=1, min=25,id="NLOOP", debounce=True)]),
             width=5
         ),
         dbc.Col(
@@ -152,42 +159,42 @@ def gui(debug: bool = False, port: int = 8000, jupyter_mode: str = "inline"):
     # fmt: on
 
     @callback(
-        Output("code-store", "data", allow_duplicate=True),
-        Output("data-store", "data", allow_duplicate=True),
+        Output("code-store", "data"),
+        Output("display", "figure"),
         Input("code-input", "value"),
         State("display", "figure"),
-        State("NGRID", "value"),
-        State("NLOOP", "value"),
-        prevent_initial_call=True,
     )
-    def set_code(code: str, fig: dict, NGRID: int, NLOOP: int):
+    def set_code(code: str, fig: dict):
 
         fig["layout"]["xaxis"]["range"] = [0, 4]
         fig["layout"]["yaxis"]["range"] = [0, 4]
 
         code_bool = [c == "B" for c in code.upper()]
 
-        new_data = recompute(None, NGRID, NLOOP, code_bool, fig)
-
-        return code_bool, new_data
+        print("CODE CHANGED")
+        return code_bool, fig
 
     @callback(
         Output("data-store", "data"),
-        Input("display", "relayoutData"),
+        Input("display", "figure"),
         Input("NGRID", "value"),
         Input("NLOOP", "value"),
         State("code-store", "data"),
-        State("display", "figure"),
-        prevent_initial_call=True,
+        # prevent_initial_call=True,
     )
-    def recompute(
-        relayout_data, NGRID: int, NLOOP: int, code_bool: list[bool], fig: dict
-    ):
+    def recompute(fig: dict, NGRID: int, NLOOP: int, code_bool: list[bool]):
+        print("RECOMP")
+        A0, A1 = fig["layout"]["xaxis"]["range"]
+        B0, B1 = fig["layout"]["yaxis"]["range"]
 
-        A = fig["layout"]["xaxis"]["range"]
-        B = fig["layout"]["yaxis"]["range"]
+        A0 = max(0.0, A0)
+        B0 = max(0.0, B0)
+        A1 = min(A1, 4.0)
+        B1 = min(B1, 4.0)
 
-        data = map_grid(0.5, int(NLOOP), np.array(code_bool), int(NGRID), A, B)
+        data = map_grid(
+            0.5, int(NLOOP), np.array(code_bool), int(NGRID), (B0, B1), (A0, A1)
+        )
         data_list = data.tolist()
 
         return data_list
@@ -202,15 +209,24 @@ def gui(debug: bool = False, port: int = 8000, jupyter_mode: str = "inline"):
         prevent_initial_call=True,
     )
     def replot(data: list, cmap: str, colorscale: float, fig: dict, NGRID: int):
+        print("REPLOT")
         A0, A1 = fig["layout"]["xaxis"]["range"]
         B0, B1 = fig["layout"]["yaxis"]["range"]
 
         data_plot = np.array(data, dtype=np.float64)
         data_plot[np.isnan(data_plot)] = 0.0
 
-        data_plot[data_plot > 0] = 0.0
+        A0 = max(0.0, A0)
+        B0 = max(0.0, B0)
+        A1 = min(A1, 4.0)
+        B1 = min(B1, 4.0)
+
+        # fig["layout"]["xaxis"]["range"] = (A0, A1)
+        # fig["layout"]["yaxis"]["range"] = (B0, B1)
+
+        # data_plot[data_plot > 0] = 0.0
         data_plot = np.asinh(data_plot / 10 ** (-colorscale))
-        fig["data"][0]["z"] = data_plot
+        fig["data"][0]["z"] = data_plot.T
         fig["data"][0]["x"] = np.linspace(A0, A1, int(NGRID))
         fig["data"][0]["y"] = np.linspace(B0, B1, int(NGRID))
 
@@ -243,7 +259,7 @@ def gui(debug: bool = False, port: int = 8000, jupyter_mode: str = "inline"):
         B = fig["layout"]["yaxis"]["range"]
 
         print("SAVING...", end="")
-        data = map_grid(0.5, int(NLOOP * 3), np.array(code), int(NGRID * 5), A, B)
+        data = map_grid(0.5, int(NLOOP * 3), np.array(code), int(NGRID * 5), B, A)
         data_plot = np.array(data, dtype=np.float64)
         data_plot[np.isnan(data_plot)] = 0.0
 
@@ -263,6 +279,7 @@ def gui(debug: bool = False, port: int = 8000, jupyter_mode: str = "inline"):
         )
         print("SAVED!")
 
+    _ = set_code("AB", fig.to_dict())
     app.run(debug=debug, use_reloader=False, jupyter_mode=jupyter_mode, port=port)
 
 
