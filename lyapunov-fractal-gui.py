@@ -23,11 +23,11 @@ def map_loop(
             if not np.isfinite(x):
                 break
 
-            if ITER > 5:
-                log = np.log(np.abs(base * (1.0 - 2 * x)))
-                if np.isfinite(log):
-                    logs[N] = log
-                    N += 1
+            # if ITER > 2:
+            log = np.log(np.abs(base * (1.0 - 2 * x)))
+            if np.isfinite(log):
+                logs[N] = log
+                N += 1
 
     if N > base_loop.shape[0] * 2:
         lyap_exp = np.nanmean(logs[:N])
@@ -171,7 +171,7 @@ def gui(debug: bool = False, port: int = 8000, jupyter_mode: str = "inline"):
 
         code_bool = [c == "B" for c in code.upper()]
 
-        print("CODE CHANGED")
+
         return code_bool, fig
 
     @callback(
@@ -180,10 +180,8 @@ def gui(debug: bool = False, port: int = 8000, jupyter_mode: str = "inline"):
         Input("NGRID", "value"),
         Input("NLOOP", "value"),
         State("code-store", "data"),
-        # prevent_initial_call=True,
     )
     def recompute(fig: dict, NGRID: int, NLOOP: int, code_bool: list[bool]):
-        print("RECOMP")
         A0, A1 = fig["layout"]["xaxis"]["range"]
         B0, B1 = fig["layout"]["yaxis"]["range"]
 
@@ -195,9 +193,8 @@ def gui(debug: bool = False, port: int = 8000, jupyter_mode: str = "inline"):
         data = map_grid(
             0.5, int(NLOOP), np.array(code_bool), int(NGRID), (B0, B1), (A0, A1)
         )
-        data_list = data.tolist()
 
-        return data_list
+        return data
 
     @callback(
         Output("display", "figure", allow_duplicate=True),
@@ -209,7 +206,6 @@ def gui(debug: bool = False, port: int = 8000, jupyter_mode: str = "inline"):
         prevent_initial_call=True,
     )
     def replot(data: list, cmap: str, colorscale: float, fig: dict, NGRID: int):
-        print("REPLOT")
         A0, A1 = fig["layout"]["xaxis"]["range"]
         B0, B1 = fig["layout"]["yaxis"]["range"]
 
@@ -258,7 +254,6 @@ def gui(debug: bool = False, port: int = 8000, jupyter_mode: str = "inline"):
         A = fig["layout"]["xaxis"]["range"]
         B = fig["layout"]["yaxis"]["range"]
 
-        print("SAVING...", end="")
         data = map_grid(0.5, int(NLOOP * 3), np.array(code), int(NGRID * 5), B, A)
         data_plot = np.array(data, dtype=np.float64)
         data_plot[np.isnan(data_plot)] = 0.0
